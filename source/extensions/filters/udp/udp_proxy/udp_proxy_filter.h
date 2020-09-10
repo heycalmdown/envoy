@@ -69,7 +69,8 @@ public:
       : cluster_manager_(cluster_manager), time_source_(time_source), cluster_(config.cluster()),
         session_timeout_(PROTOBUF_GET_MS_OR_DEFAULT(config, idle_timeout, 60 * 1000)),
         use_original_src_ip_(config.use_original_src_ip()),
-        stats_(generateStats(config.stat_prefix(), root_scope)) {
+        stats_(generateStats(config.stat_prefix(), root_scope)),
+        fixed_delay_(PROTOBUF_GET_MS_OR_DEFAULT(config, fixed_delay, 0)) {
     if (use_original_src_ip_ && !Api::OsSysCallsSingleton::get().supportsIpTransparent()) {
       ExceptionUtil::throwEnvoyException(
           "The platform does not support either IP_TRANSPARENT or IPV6_TRANSPARENT. Or the envoy "
@@ -87,6 +88,7 @@ public:
   const Udp::HashPolicy* hashPolicy() const { return hash_policy_.get(); }
   UdpProxyDownstreamStats& stats() const { return stats_; }
   TimeSource& timeSource() const { return time_source_; }
+  std::chrono::milliseconds fixedDelay() const { return fixed_delay_; }
 
 private:
   static UdpProxyDownstreamStats generateStats(const std::string& stat_prefix,
@@ -103,6 +105,7 @@ private:
   const bool use_original_src_ip_;
   std::unique_ptr<const HashPolicyImpl> hash_policy_;
   mutable UdpProxyDownstreamStats stats_;
+  const std::chrono::milliseconds fixed_delay_;
 };
 
 using UdpProxyFilterConfigSharedPtr = std::shared_ptr<const UdpProxyFilterConfig>;

@@ -237,7 +237,7 @@ void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
     write_(*buffer_queue_.front());
     buffer_queue_.pop();
   });
-  delay_timer_->enableTimer(std::chrono::milliseconds(500));
+  delay_timer_->enableTimer(std::chrono::milliseconds(cluster_.filter_.config_->fixedDelay()));
 }
 
 void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {
