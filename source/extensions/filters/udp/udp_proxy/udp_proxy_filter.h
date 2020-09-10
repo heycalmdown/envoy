@@ -160,6 +160,8 @@ private:
     void onIdleTimer();
     void onReadReady();
 
+    void write_(const Buffer::Instance& buffer);
+
     // Network::UdpPacketProcessor
     void processPacket(Network::Address::InstanceConstSharedPtr local_address,
                        Network::Address::InstanceConstSharedPtr peer_address,
@@ -172,6 +174,8 @@ private:
     }
 
     ClusterInfo& cluster_;
+    std::queue<Buffer::InstancePtr> buffer_queue_;
+    Event::TimerPtr delay_timer_;
     const bool use_original_src_ip_;
     const Network::UdpRecvData::LocalPeerAddresses addresses_;
     const Upstream::HostConstSharedPtr host_;

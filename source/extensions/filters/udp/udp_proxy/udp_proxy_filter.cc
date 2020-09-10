@@ -2,6 +2,7 @@
 
 #include "envoy/network/listener.h"
 
+#include "common/buffer/buffer_impl.h"
 #include "common/network/socket_option_factory.h"
 
 namespace Envoy {
@@ -230,6 +231,16 @@ void UdpProxyFilter::ActiveSession::onReadReady() {
 }
 
 void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
+  buffer_queue_.push(std::make_unique<Buffer::OwnedImpl>(buffer));
+
+  delay_timer_ = cluster_.filter_.read_callbacks_->udpListener().dispatcher().createTimer([this] {
+    write_(*buffer_queue_.front());
+    buffer_queue_.pop();
+  });
+  delay_timer_->enableTimer(std::chrono::milliseconds(500));
+}
+
+void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {
   ENVOY_LOG(trace, "writing {} byte datagram upstream: downstream={} local={} upstream={}",
             buffer.length(), addresses_.peer_->asStringView(), addresses_.local_->asStringView(),
             host_->address()->asStringView());
