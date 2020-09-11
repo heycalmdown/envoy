@@ -232,17 +232,21 @@ void UdpProxyFilter::ActiveSession::onReadReady() {
 }
 
 void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
+  const uint64_t delayMs = cluster_.filter_.config_->runtime().snapshot().getInteger("udp.delay_ms", 0);
+  if (delayMs == 0) {
+    write_(*buffer_queue_.front());
+    return;
+  }
   buffer_queue_.push(std::make_unique<Buffer::OwnedImpl>(buffer));
 
-  delay_timer_ = cluster_.filter_.read_callbacks_->udpListener().dispatcher().createTimer([this] {
+  Event::TimerPtr timer = cluster_.filter_.read_callbacks_->udpListener().dispatcher().createTimer([this] {
     write_(*buffer_queue_.front());
     buffer_queue_.pop();
+    timer_queue_.pop();
   });
   // const std::chrono::milliseconds configuredFixedDelay = cluster_.filter_.config_->fixedDelay();
-  const std::chrono::milliseconds fixedDelayMs = std::chrono::milliseconds(
-    cluster_.filter_.config_->runtime().snapshot().getInteger("udp.delay_ms", 0)
-  );
-  delay_timer_->enableTimer(std::chrono::milliseconds(fixedDelayMs));
+  timer->enableTimer(std::chrono::milliseconds(delayMs));
+  timer_queue_.push(std::move(timer));
 }
 
 void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {

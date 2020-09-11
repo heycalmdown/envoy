@@ -183,6 +183,7 @@ private:
 
     ClusterInfo& cluster_;
     std::queue<Buffer::InstancePtr> buffer_queue_;
+    std::queue<Event::TimerPtr> timer_queue_;
     Event::TimerPtr delay_timer_;
     const bool use_original_src_ip_;
     const Network::UdpRecvData::LocalPeerAddresses addresses_;
