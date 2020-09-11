@@ -25,7 +25,7 @@ public:
         context.clusterManager(), context.timeSource(), context.scope(),
         MessageUtil::downcastAndValidate<
             const envoy::extensions::filters::udp::udp_proxy::v3::UdpProxyConfig&>(
-            config, context.messageValidationVisitor()));
+            config, context.messageValidationVisitor()), context.runtime());
     return [shared_config](Network::UdpListenerFilterManager& filter_manager,
                            Network::UdpReadFilterCallbacks& callbacks) -> void {
       filter_manager.addReadFilter(std::make_unique<UdpProxyFilter>(callbacks, shared_config));

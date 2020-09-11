@@ -1,6 +1,7 @@
 #include "extensions/filters/udp/udp_proxy/udp_proxy_filter.h"
 
 #include "envoy/network/listener.h"
+#include "envoy/runtime/runtime.h"
 
 #include "common/buffer/buffer_impl.h"
 #include "common/network/socket_option_factory.h"
@@ -237,7 +238,11 @@ void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
     write_(*buffer_queue_.front());
     buffer_queue_.pop();
   });
-  delay_timer_->enableTimer(std::chrono::milliseconds(cluster_.filter_.config_->fixedDelay()));
+  // const std::chrono::milliseconds configuredFixedDelay = cluster_.filter_.config_->fixedDelay();
+  const std::chrono::milliseconds fixedDelayMs = std::chrono::milliseconds(
+    cluster_.filter_.config_->runtime().snapshot().getInteger("udp.delay_ms", 0)
+  );
+  delay_timer_->enableTimer(std::chrono::milliseconds(fixedDelayMs));
 }
 
 void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {

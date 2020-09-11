@@ -4,6 +4,7 @@
 #include "envoy/event/timer.h"
 #include "envoy/extensions/filters/udp/udp_proxy/v3/udp_proxy.pb.h"
 #include "envoy/network/filter.h"
+#include "envoy/runtime/runtime.h"
 #include "envoy/upstream/cluster_manager.h"
 
 #include "common/api/os_sys_calls_impl.h"
@@ -65,12 +66,14 @@ class UdpProxyFilterConfig {
 public:
   UdpProxyFilterConfig(Upstream::ClusterManager& cluster_manager, TimeSource& time_source,
                        Stats::Scope& root_scope,
-                       const envoy::extensions::filters::udp::udp_proxy::v3::UdpProxyConfig& config)
+                       const envoy::extensions::filters::udp::udp_proxy::v3::UdpProxyConfig& config,
+                       Runtime::Loader& runtime)
       : cluster_manager_(cluster_manager), time_source_(time_source), cluster_(config.cluster()),
         session_timeout_(PROTOBUF_GET_MS_OR_DEFAULT(config, idle_timeout, 60 * 1000)),
         use_original_src_ip_(config.use_original_src_ip()),
         stats_(generateStats(config.stat_prefix(), root_scope)),
-        fixed_delay_(PROTOBUF_GET_MS_OR_DEFAULT(config, fixed_delay, 0)) {
+        fixed_delay_(PROTOBUF_GET_MS_OR_DEFAULT(config, fixed_delay, 0)),
+        runtime_(runtime) {
     if (use_original_src_ip_ && !Api::OsSysCallsSingleton::get().supportsIpTransparent()) {
       ExceptionUtil::throwEnvoyException(
           "The platform does not support either IP_TRANSPARENT or IPV6_TRANSPARENT. Or the envoy "
@@ -81,6 +84,7 @@ public:
     }
   }
 
+  Runtime::Loader& runtime() { return runtime_; }
   const std::string& cluster() const { return cluster_; }
   Upstream::ClusterManager& clusterManager() const { return cluster_manager_; }
   std::chrono::milliseconds sessionTimeout() const { return session_timeout_; }
@@ -106,9 +110,10 @@ private:
   std::unique_ptr<const HashPolicyImpl> hash_policy_;
   mutable UdpProxyDownstreamStats stats_;
   const std::chrono::milliseconds fixed_delay_;
+  Runtime::Loader& runtime_;
 };
 
-using UdpProxyFilterConfigSharedPtr = std::shared_ptr<const UdpProxyFilterConfig>;
+using UdpProxyFilterConfigSharedPtr = std::shared_ptr<UdpProxyFilterConfig>;
 
 /**
  * Currently, it only implements the hash based routing.
@@ -274,7 +279,7 @@ private:
   void onClusterAddOrUpdate(Upstream::ThreadLocalCluster& cluster) final;
   void onClusterRemoval(const std::string& cluster_name) override;
 
-  const UdpProxyFilterConfigSharedPtr config_;
+  UdpProxyFilterConfigSharedPtr config_;
   const Upstream::ClusterUpdateCallbacksHandlePtr cluster_update_callbacks_;
   // Right now we support a single cluster to route to. It is highly likely in the future that
   // we will support additional routing options either using filter chain matching, weighting,
