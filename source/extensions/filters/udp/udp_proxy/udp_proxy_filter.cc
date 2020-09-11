@@ -234,7 +234,7 @@ void UdpProxyFilter::ActiveSession::onReadReady() {
 void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
   const uint64_t delayMs = cluster_.filter_.config_->runtime().snapshot().getInteger("udp.delay_ms", 0);
   if (delayMs == 0) {
-    write_(*buffer_queue_.front());
+    write_(buffer);
     return;
   }
   buffer_queue_.push(std::make_unique<Buffer::OwnedImpl>(buffer));
