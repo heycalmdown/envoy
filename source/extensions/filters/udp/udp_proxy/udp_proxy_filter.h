@@ -163,6 +163,7 @@ private:
     const Network::UdpRecvData::LocalPeerAddresses& addresses() const { return addresses_; }
     const Upstream::Host& host() const { return *host_; }
     void write(const Buffer::Instance& buffer);
+    void onUpdate();
 
   private:
     void onIdleTimer();
@@ -183,8 +184,7 @@ private:
 
     ClusterInfo& cluster_;
     std::queue<Buffer::InstancePtr> buffer_queue_;
-    std::queue<Event::TimerPtr> timer_queue_;
-    Event::TimerPtr delay_timer_;
+    std::queue<std::chrono::milliseconds> timer_queue_;
     const bool use_original_src_ip_;
     const Network::UdpRecvData::LocalPeerAddresses addresses_;
     const Upstream::HostConstSharedPtr host_;
@@ -250,6 +250,7 @@ private:
     ~ClusterInfo();
     void onData(Network::UdpRecvData& data);
     void removeSession(const ActiveSession* session);
+    void onUpdate();
 
     UdpProxyFilter& filter_;
     Upstream::ThreadLocalCluster& cluster_;
@@ -279,6 +280,7 @@ private:
   // Upstream::ClusterUpdateCallbacks
   void onClusterAddOrUpdate(Upstream::ThreadLocalCluster& cluster) final;
   void onClusterRemoval(const std::string& cluster_name) override;
+  void onDelayTimer();
 
   UdpProxyFilterConfigSharedPtr config_;
   const Upstream::ClusterUpdateCallbacksHandlePtr cluster_update_callbacks_;
@@ -286,6 +288,7 @@ private:
   // we will support additional routing options either using filter chain matching, weighting,
   // etc.
   absl::optional<ClusterInfo> cluster_info_;
+  Event::TimerPtr delay_timer_;
 };
 
 } // namespace UdpProxy

@@ -15,7 +15,9 @@ UdpProxyFilter::UdpProxyFilter(Network::UdpReadFilterCallbacks& callbacks,
                                const UdpProxyFilterConfigSharedPtr& config)
     : UdpListenerReadFilter(callbacks), config_(config),
       cluster_update_callbacks_(
-          config->clusterManager().addThreadLocalClusterUpdateCallbacks(*this)) {
+          config->clusterManager().addThreadLocalClusterUpdateCallbacks(*this)),
+      delay_timer_(read_callbacks_->udpListener().dispatcher().createTimer(
+          [this] { onDelayTimer(); })) {
   Upstream::ThreadLocalCluster* cluster = config->clusterManager().get(config->cluster());
   if (cluster != nullptr) {
     onClusterAddOrUpdate(*cluster);
@@ -30,6 +32,7 @@ void UdpProxyFilter::onClusterAddOrUpdate(Upstream::ThreadLocalCluster& cluster)
   ENVOY_LOG(debug, "udp proxy: attaching to cluster {}", cluster.info()->name());
   ASSERT(cluster_info_ == absl::nullopt || &cluster_info_.value().cluster_ != &cluster);
   cluster_info_.emplace(*this, cluster);
+  delay_timer_->enableTimer(std::chrono::milliseconds(1));
 }
 
 void UdpProxyFilter::onClusterRemoval(const std::string& cluster) {
@@ -39,6 +42,14 @@ void UdpProxyFilter::onClusterRemoval(const std::string& cluster) {
 
   ENVOY_LOG(debug, "udp proxy: detaching from cluster {}", cluster);
   cluster_info_.reset();
+}
+
+void UdpProxyFilter::onDelayTimer() {
+  delay_timer_->enableTimer(std::chrono::milliseconds(1));
+  if (!cluster_info_.has_value()) {
+    return;
+  }
+  cluster_info_.value().onUpdate();
 }
 
 void UdpProxyFilter::onData(Network::UdpRecvData& data) {
@@ -154,6 +165,10 @@ void UdpProxyFilter::ClusterInfo::removeSession(const ActiveSession* session) {
   sessions_.erase(session);
 }
 
+void UdpProxyFilter::ClusterInfo::onUpdate() {
+  std::for_each(sessions_.begin(), sessions_.end(), [](auto& s) { s->onUpdate(); });
+}
+
 UdpProxyFilter::ActiveSession::ActiveSession(ClusterInfo& cluster,
                                              Network::UdpRecvData::LocalPeerAddresses&& addresses,
                                              const Upstream::HostConstSharedPtr& host)
@@ -239,14 +254,12 @@ void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
   }
   buffer_queue_.push(std::make_unique<Buffer::OwnedImpl>(buffer));
 
-  Event::TimerPtr timer = cluster_.filter_.read_callbacks_->udpListener().dispatcher().createTimer([this] {
-    write_(*buffer_queue_.front());
-    buffer_queue_.pop();
-    timer_queue_.pop();
-  });
-  // const std::chrono::milliseconds configuredFixedDelay = cluster_.filter_.config_->fixedDelay();
-  timer->enableTimer(std::chrono::milliseconds(delayMs));
-  timer_queue_.push(std::move(timer));
+  const auto time_now = std::chrono::duration_cast<std::chrono::milliseconds>(
+    cluster_.filter_.read_callbacks_->udpListener().dispatcher().timeSource().systemTime().time_since_epoch());
+
+  timer_queue_.push(time_now + std::chrono::milliseconds(delayMs));
+
+  // ENVOY_LOG(info, "--> {} length={}", timer_queue_.front().count(), timer_queue_.size());
 }
 
 void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {
@@ -273,6 +286,26 @@ void UdpProxyFilter::ActiveSession::write_(const Buffer::Instance& buffer) {
     cluster_.cluster_stats_.sess_tx_datagrams_.inc();
     cluster_.cluster_.info()->stats().upstream_cx_tx_bytes_total_.add(buffer_length);
   }
+}
+
+void UdpProxyFilter::ActiveSession::onUpdate() {
+  if (timer_queue_.size() == 0) {
+    return;
+  }
+  const auto timestamp = timer_queue_.front();
+
+  const auto time_now = std::chrono::duration_cast<std::chrono::milliseconds>(
+    cluster_.filter_.read_callbacks_->udpListener().dispatcher().timeSource().systemTime().time_since_epoch());
+
+  // ENVOY_LOG(info, "--> timestamp={} time_now={}", timestamp.count(), time_now.count());
+
+  if (time_now < timestamp) {
+    return;
+  }
+
+  write_(*buffer_queue_.front());
+  buffer_queue_.pop();
+  timer_queue_.pop();
 }
 
 void UdpProxyFilter::ActiveSession::processPacket(Network::Address::InstanceConstSharedPtr,
