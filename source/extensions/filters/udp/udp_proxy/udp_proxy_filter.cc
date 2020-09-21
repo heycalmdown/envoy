@@ -259,6 +259,7 @@ void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
 
   timer_queue_.push(time_now + std::chrono::milliseconds(delayMs));
 
+  onUpdate();
   // ENVOY_LOG(info, "--> {} length={}", timer_queue_.front().count(), timer_queue_.size());
 }
 
