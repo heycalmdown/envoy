@@ -52,6 +52,16 @@ public:
    */
   virtual void enableHRTimer(const std::chrono::microseconds& us,
                              const ScopeTrackedObject* object = nullptr) PURE;
+
+  /**
+   * Enable an interval timer. This timer works at the specified each time until it is deleted.
+   * 
+   * @param ms supplies the duration of the alarm in milliseconds.
+   * @param object supplies an optional scope for the duration of the alarm.
+   */
+  virtual void enableIntervalTimer(const std::chrono::milliseconds& ms, 
+                                   const ScopeTrackedObject* object = nullptr) PURE;
+
   /**
    * Return whether the timer is currently armed.
    */

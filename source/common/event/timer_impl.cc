@@ -11,7 +11,7 @@ namespace Envoy {
 namespace Event {
 
 TimerImpl::TimerImpl(Libevent::BasePtr& libevent, TimerCb cb, Dispatcher& dispatcher)
-    : cb_(cb), dispatcher_(dispatcher),
+    : libevent_(libevent), cb_(cb), dispatcher_(dispatcher),
       activate_timers_next_event_loop_(
           // Only read the runtime feature if the runtime loader singleton has already been created.
           // Accessing runtime features too early in the initialization sequence triggers logging
@@ -50,6 +50,30 @@ void TimerImpl::enableHRTimer(const std::chrono::microseconds& d,
   timeval tv;
   TimerUtils::durationToTimeval(d, tv);
   internalEnableTimer(tv, object);
+}
+
+void TimerImpl::enableIntervalTimer(const std::chrono::milliseconds& d, const ScopeTrackedObject* object) {
+  object_ = object;
+  
+  timeval tv;
+  TimerUtils::durationToTimeval(d, tv);
+  event_assign(
+    &raw_event_, 
+    libevent_.get(),
+    -1,
+    EV_PERSIST, 
+    [](evutil_socket_t, short, void* arg) -> void {
+        TimerImpl* timer = static_cast<TimerImpl*>(arg);
+        if (timer->object_ == nullptr) {
+          timer->cb_();
+          return;
+        }
+        ScopeTrackerScopeState scope(timer->object_, timer->dispatcher_);
+        timer->object_ = nullptr;
+        timer->cb_();
+    }, 
+    this);
+  event_add(&raw_event_, &tv);
 }
 
 void TimerImpl::internalEnableTimer(const timeval& tv, const ScopeTrackedObject* object) {

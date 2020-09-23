@@ -60,11 +60,14 @@ public:
   void enableTimer(const std::chrono::milliseconds& d, const ScopeTrackedObject* scope) override;
   void enableHRTimer(const std::chrono::microseconds& us,
                      const ScopeTrackedObject* object) override;
+  void enableIntervalTimer(const std::chrono::milliseconds& ms, 
+                           const ScopeTrackedObject* object) override;
 
   bool enabled() override;
 
 private:
   void internalEnableTimer(const timeval& tv, const ScopeTrackedObject* scope);
+  Libevent::BasePtr& libevent_;
   TimerCb cb_;
   Dispatcher& dispatcher_;
   // This has to be atomic for alarms which are handled out of thread, for
