@@ -246,7 +246,10 @@ void UdpProxyFilter::ActiveSession::onReadReady() {
 }
 
 void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
-  const uint64_t delayMs = cluster_.filter_.config_->runtime().snapshot().getInteger("udp.delay_ms", 0);
+  const uint64_t delayMs = cluster_.filter_.config_->runtime().snapshot().getInteger(
+    fmt::format("udp.{}.delay_ms", addresses_.local_->ip()->port())
+    , 0);
+
   if (delayMs == 0) {
     write_(buffer);
     return;
