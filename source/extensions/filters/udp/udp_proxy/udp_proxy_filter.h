@@ -199,6 +199,7 @@ private:
     // write to the upstream host.
     const Network::SocketPtr socket_;
     const Event::FileEventPtr socket_event_;
+    std::string udp_localport_delay_ms_key_{};
   };
 
   using ActiveSessionPtr = std::unique_ptr<ActiveSession>;

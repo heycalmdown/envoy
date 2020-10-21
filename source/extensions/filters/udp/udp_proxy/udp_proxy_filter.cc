@@ -202,6 +202,8 @@ UdpProxyFilter::ActiveSession::ActiveSession(ClusterInfo& cluster,
     ENVOY_LOG(debug, "The original src is enabled for address {}.",
               addresses_.peer_->asStringView());
   }
+  udp_localport_delay_ms_key_ =
+        fmt::format("udp.{}.delay_ms", addresses_.local_->ip()->port());
 
   // TODO(mattklein123): Enable dropped packets socket option. In general the Socket abstraction
   // does not work well right now for client sockets. It's too heavy weight and is aimed at listener
@@ -247,8 +249,7 @@ void UdpProxyFilter::ActiveSession::onReadReady() {
 
 void UdpProxyFilter::ActiveSession::write(const Buffer::Instance& buffer) {
   const uint64_t delayMs = cluster_.filter_.config_->runtime().snapshot().getInteger(
-    fmt::format("udp.{}.delay_ms", addresses_.local_->ip()->port())
-    , 0);
+    udp_localport_delay_ms_key_, 0);
 
   if (delayMs == 0) {
     write_(buffer);
